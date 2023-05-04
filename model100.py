@@ -9,6 +9,7 @@ from keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report,confusion_matrix
 from keras.callbacks import ReduceLROnPlateau
+import torch
 
 train_df = pd.read_csv("datas/archive/sign_mnist_train.csv")
 test_df = pd.read_csv("datas/archive/sign_mnist_test.csv")
@@ -98,6 +99,7 @@ model.summary()
 
 history = model.fit(datagen.flow(x_train,y_train, batch_size = 128) ,epochs = 20 , validation_data = (x_test, y_test) , callbacks = [learning_rate_reduction])
 
+torch.save(model.state_dict(), 'hand_recognition_model.pth')
 
 print("Accuracy of the model is - " , model.evaluate(x_test,y_test)[1]*100 , "%")
 
