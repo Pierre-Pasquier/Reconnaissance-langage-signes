@@ -1,17 +1,20 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
-from cnn_model import CNN
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import to_categorical
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Charger les données
+
 train = pd.read_csv("datas/archive/sign_mnist_train/sign_mnist_train.csv")
 test = pd.read_csv("datas/archive/sign_mnist_test/sign_mnist_test.csv")
 
-# Extraire les étiquettes et les images
+# Mise en place
 y_train = train['label'].values
 y_test = test['label'].values
 X_train = train.drop(['label'], axis=1).values
@@ -25,76 +28,53 @@ y_test = encoder.transform(y_test)
 X_train = X_train / 255.0
 X_test = X_test / 255.0
 
-# Redimensionner les données
-X_train = X_train.reshape(-1, 1, 28, 28)
-X_test = X_test.reshape(-1, 1, 28, 28)
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
 
-# Convertir les données en tenseurs PyTorch
-X_train = torch.from_numpy(X_train).float()
-y_train = torch.from_numpy(y_train).long()
-X_test = torch.from_numpy(X_test).float()
-y_test = torch.from_numpy(y_test).long()
+# Conversion des étiquettes
+y_train = to_categorical(y_train)
+y_test = to_categorical(y_test)
 
-# Créer des ensembles de données PyTorch
-train_dataset = TensorDataset(X_train, y_train)
-test_dataset = TensorDataset(X_test, y_test)
-
-# Créer des chargeurs de données
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-
-
-
-model = CNN()
-
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-epochs = 20
-for epoch in range(epochs):
-    running_loss = 0.0
-    for i, data in enumerate(train_loader, 0):
-        inputs, labels = data
-        optimizer.zero_grad()
-
-        # Forward pass
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-
-        # Backward pass
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
-
-    print("Epoch %d - Loss: %.3f" % (epoch + 1, running_loss / (i + 1)))
-
-print("Finished Training")
-
-correct = 0
-total = 0
-with torch.no_grad():
-    for data in test_loader:
-        images, labels = data
-        outputs = model(images)
-        _, predicted = torch.max(outputs.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-
-print("Accuracy: %d %%" % (100 * correct / total))
+# Modèle
+model = Sequential()
+model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(28, 28, 1)))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(len(np.unique(y_train.argmax(axis=1))), activation='softmax'))
 
 
-y_true = []
-y_pred = []
-with torch.no_grad():
-    for data in test_loader:
-        images, labels = data
-        outputs = model(images)
-        _, predicted = torch.max(outputs.data, 1)
-        y_true.extend(labels.tolist())
-        y_pred.extend(predicted.tolist())
+model.compile(optimizer=Adam(lr=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
+# Entraînement du modèle
+model.fit(X_train, y_train, batch_size=64, epochs=20, verbose=1, validation_data=(X_test, y_test))
+
+# Évaluation du modèle
+_, accuracy = model.evaluate(X_test, y_test, verbose=0)
+print("Accuracy: %.2f%%" % (accuracy * 100))
+
+# Rapport de classification
+y_true = y_test.argmax(axis=1)
+y_pred = model.predict(X_test).argmax(axis=1)
 print(classification_report(y_true, y_pred))
 
 
-torch.save(model, 'model.pth')
+cm = confusion_matrix(y_true, y_pred)
+
+# Matrice de confusion
+plt.figure(figsize=(10,10))
+sns.heatmap(cm, annot=True, fmt=".0f", linewidths=.5, square = True, cmap = 'Blues_r');
+plt.ylabel('Actual label');
+plt.xlabel('Predicted label');
+
+# Calcul de la precision
+all_sample_title = 'Accuracy Score: {0}'.format(accuracy)
+plt.title(all_sample_title, size = 15);
+plt.show()
+
+# Sauvegarde du modèle
+model.save('model_keras.h5')
+

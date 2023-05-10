@@ -1,20 +1,24 @@
+print("Importing packages...")
 import matplotlib.pyplot as plt
 import seaborn as sns
-import keras
-import panda as pd
+import pandas as pd
 import numpy as np
-from keras.models import Sequential
-from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout , BatchNormalization
-from keras.preprocessing.image import ImageDataGenerator
-from sklearn.model_selection import train_test_split
+
 from sklearn.metrics import classification_report,confusion_matrix
+from keras.layers import Dense, Conv2D , MaxPool2D , Flatten , Dropout , BatchNormalization
+from keras.models import Sequential
+from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import ReduceLROnPlateau
-import torch
+
+
+print("Reading CSVs...")
 
 train_df = pd.read_csv("datas/archive/sign_mnist_train.csv")
 test_df = pd.read_csv("datas/archive/sign_mnist_test.csv")
-
 test = pd.read_csv("datas/archive/sign_mnist_test.csv")
+
+print("CSVs opened successfully !")
+
 y = test['label']
 
 
@@ -99,7 +103,7 @@ model.summary()
 
 history = model.fit(datagen.flow(x_train,y_train, batch_size = 128) ,epochs = 20 , validation_data = (x_test, y_test) , callbacks = [learning_rate_reduction])
 
-torch.save(model.state_dict(), 'hand_recognition_model.pth')
+
 
 print("Accuracy of the model is - " , model.evaluate(x_test,y_test)[1]*100 , "%")
 
@@ -127,12 +131,12 @@ ax[1].set_ylabel("Loss")
 plt.show()
 
 
-predictions = model.predict_classes(x_test)
+predictions = np.argmax(model.predict(x_test), axis=-1)
+
 for i in range(len(predictions)):
     if(predictions[i] >= 9):
         predictions[i] += 1
 predictions[:5]
-
 
 classes = ["Class " + str(i) for i in range(25) if i != 9]
 print(classification_report(y, predictions, target_names = classes))
@@ -144,7 +148,11 @@ cm = pd.DataFrame(cm , index = [i for i in range(25) if i != 9] , columns = [i f
 plt.figure(figsize = (15,15))
 sns.heatmap(cm,cmap= "Blues", linecolor = 'black' , linewidth = 1 , annot = True, fmt='')
 
-correct = np.nonzero(predictions == y)[0]
+
+
+predictions = pd.Series(predictions)
+y = y.reset_index(drop=True)  # Réinitialiser l'index pour être sûr qu'il correspond
+correct = (predictions == y).to_numpy().nonzero()[0]
 
 i = 0
 for c in correct[:6]:
@@ -153,9 +161,4 @@ for c in correct[:6]:
     plt.title("Predicted Class {},Actual Class {}".format(predictions[c], y[c]))
     plt.tight_layout()
     i += 1
-
-
-
-
-
-
+model.save('hand_recognition_model.h5')
